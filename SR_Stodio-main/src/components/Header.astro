@@ -1,0 +1,486 @@
+---
+---
+
+<header class="header">
+	<div class="logo">
+		<a href="/"><h1>HASH<span> Movies</span></h1></a>
+	</div>
+
+	<div class="search-container">
+		<div class="search-input-wrapper">
+			<svg
+				class="search-icon"
+				width="20"
+				height="20"
+				viewBox="0 0 24 24"
+				fill="none"
+				xmlns="http://www.w3.org/2000/svg"
+			>
+				<path
+					d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"></path>
+				<path
+					d="M21 21L16.65 16.65"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"></path>
+			</svg>
+			<input
+				type="search"
+				id="search-input"
+				placeholder="Search movies..."
+				autocomplete="off"
+				role="combobox"
+				aria-autocomplete="list"
+				aria-controls="search-results"
+				aria-expanded="false"
+			/>
+		</div>
+		<div id="search-results" class="search-results hidden" role="listbox" aria-live="polite">
+		</div>
+	</div>
+
+	<nav class="nav-links" id="nav-links">
+		<a href="/" class="active">Home</a>
+		<a href="/#trending">Trending</a>
+		<a href="/#top-rated">Top Rated</a>
+	</nav>
+
+	<button
+		class="menu-toggle"
+		id="menu-toggle"
+		aria-label="Toggle navigation menu"
+		aria-expanded="false"
+	>
+		<svg
+			width="24"
+			height="24"
+			viewBox="0 0 24 24"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path
+				class="line line-1"
+				d="M3 6H21"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"></path>
+			<path
+				class="line line-2"
+				d="M3 12H21"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"></path>
+			<path
+				class="line line-3"
+				d="M3 18H21"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"></path>
+		</svg>
+	</button>
+</header>
+
+<script>
+	import { slugify } from "../utils/slugify.js";
+
+	const searchInput = document.getElementById("search-input");
+	const searchResults = document.getElementById("search-results");
+
+	if (searchInput instanceof HTMLInputElement && searchResults) {
+		let debounceTimer;
+		let activeRequest;
+
+		const hideResults = () => {
+			searchResults.classList.add("hidden");
+			searchInput.setAttribute("aria-expanded", "false");
+		};
+
+		const showMessage = (message, className = "no-results") => {
+			const item = document.createElement("div");
+			item.className = className;
+			item.textContent = message;
+			searchResults.replaceChildren(item);
+			searchResults.classList.remove("hidden");
+			searchInput.setAttribute("aria-expanded", "true");
+		};
+
+		const showMovies = (movies) => {
+			if (movies.length === 0) {
+				showMessage("No movies found.");
+				return;
+			}
+
+			const fragment = document.createDocumentFragment();
+			for (const movie of movies) {
+				const link = document.createElement("a");
+				link.href = `/movie/${slugify(movie.title)}-${movie.id}`;
+				link.className = "search-result-item";
+				link.setAttribute("role", "option");
+
+				if (movie.imageUrl) {
+					const image = document.createElement("img");
+					image.src = movie.imageUrl;
+					image.alt = "";
+					link.append(image);
+				}
+
+				const info = document.createElement("div");
+				info.className = "search-result-info";
+				const title = document.createElement("h4");
+				title.textContent = movie.title;
+				const year = document.createElement("span");
+				year.textContent = movie.year;
+				info.append(title, year);
+				link.append(info);
+				fragment.append(link);
+			}
+
+			searchResults.replaceChildren(fragment);
+			searchResults.classList.remove("hidden");
+			searchInput.setAttribute("aria-expanded", "true");
+		};
+
+		searchInput.addEventListener("input", () => {
+			const query = searchInput.value.trim();
+			window.clearTimeout(debounceTimer);
+			activeRequest?.abort();
+
+			if (query.length < 2) {
+				searchResults.replaceChildren();
+				hideResults();
+				return;
+			}
+
+			debounceTimer = window.setTimeout(async () => {
+				activeRequest = new AbortController();
+				try {
+					const response = await fetch(
+						`/api/search.json?q=${encodeURIComponent(query)}`,
+						{ signal: activeRequest.signal },
+					);
+					const result = await response.json();
+					if (!response.ok) {
+						throw new Error(result.error || "Movie search is unavailable.");
+					}
+					showMovies(result.movies);
+				} catch (error) {
+					if (error.name !== "AbortError") {
+						showMessage(error.message || "Movie search is unavailable.", "search-error");
+					}
+				}
+			}, 250);
+		});
+
+		document.addEventListener("click", (event) => {
+			if (!searchInput.contains(event.target) && !searchResults.contains(event.target)) {
+				hideResults();
+			}
+		});
+
+		searchInput.addEventListener("keydown", (event) => {
+			if (event.key === "Escape") {
+				hideResults();
+				searchInput.blur();
+			}
+		});
+	}
+</script>
+
+<script is:inline>
+	(function () {
+		const menuToggle = document.getElementById("menu-toggle");
+		const navLinks = document.getElementById("nav-links");
+
+		if (menuToggle && navLinks) {
+			menuToggle.addEventListener("click", (e) => {
+				e.stopPropagation();
+				const active = navLinks.classList.toggle("active");
+				menuToggle.classList.toggle("active");
+				menuToggle.setAttribute(
+					"aria-expanded",
+					active ? "true" : "false"
+				);
+			});
+
+			// Close menu if a link is clicked
+			navLinks.querySelectorAll("a").forEach((link) => {
+				link.addEventListener("click", () => {
+					navLinks.classList.remove("active");
+					menuToggle.classList.remove("active");
+					menuToggle.setAttribute("aria-expanded", "false");
+				});
+			});
+
+			// Close if click outside
+			document.addEventListener("click", (e) => {
+				if (
+					!navLinks.contains(e.target) &&
+					!menuToggle.contains(e.target)
+				) {
+					navLinks.classList.remove("active");
+					menuToggle.classList.remove("active");
+					menuToggle.setAttribute("aria-expanded", "false");
+				}
+			});
+		}
+	})();
+</script>
+
+<style>
+	.header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 2rem 5%;
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 100;
+		background: linear-gradient(
+			to bottom,
+			rgba(0, 0, 0, 0.9) 0%,
+			transparent 100%
+		);
+	}
+
+	.logo {
+		flex-shrink: 0;
+	}
+
+	.logo a {
+		text-decoration: none;
+		color: inherit;
+	}
+
+	.logo h1 {
+		font-size: 1.5rem;
+		font-weight: 800;
+		margin: 0;
+		letter-spacing: -0.5px;
+	}
+
+	.logo span {
+		color: var(--accent-color);
+	}
+
+	/* Search Styles */
+	.search-container {
+		position: relative;
+		flex: 1;
+		max-width: 400px;
+		margin: 0 2rem;
+	}
+
+	.search-input-wrapper {
+		position: relative;
+		width: 100%;
+		display: flex;
+		align-items: center;
+	}
+
+	.search-icon {
+		position: absolute;
+		left: 12px;
+		color: #888;
+		pointer-events: none;
+	}
+
+	#search-input {
+		width: 100%;
+		padding: 0.8rem 1rem 0.8rem 2.5rem;
+		border-radius: 20px;
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		background-color: #111111;
+		color: white;
+		font-family: "Inter", sans-serif;
+		font-size: 0.95rem;
+		outline: none;
+		-webkit-appearance: none;
+		appearance: none;
+		transition: all 0.3s ease;
+		text-shadow: none; /* override global */
+	}
+
+	#search-input:focus {
+		border-color: var(--accent-color);
+		background-color: #000000;
+		box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.2);
+	}
+
+	#search-input::placeholder {
+		color: #888;
+		text-shadow: none;
+	}
+
+	.search-results {
+		position: absolute;
+		top: calc(100% + 10px);
+		left: 0;
+		width: 100%;
+		background-color: #111111;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 8px;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+		overflow: hidden;
+		z-index: 1000;
+	}
+
+	.search-results.hidden {
+		display: none;
+	}
+
+	.nav-links {
+		display: flex;
+		gap: 2rem;
+		flex-shrink: 0;
+	}
+
+	.nav-links a {
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		transition: color 0.3s ease;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+	}
+
+	.nav-links a:hover,
+	.nav-links a.active {
+		color: var(--text-color);
+	}
+
+	/* Mobile Toggle styles */
+	.menu-toggle {
+		display: none;
+		background: none;
+		border: none;
+		color: white;
+		cursor: pointer;
+		padding: 0.5rem;
+		z-index: 110;
+		align-items: center;
+		justify-content: center;
+		outline: none;
+		flex-shrink: 0;
+		width: 44px;
+		height: 44px;
+		border-radius: 50%;
+		transition: background-color 0.3s ease;
+	}
+
+	.menu-toggle:hover,
+	.menu-toggle:focus {
+		background-color: rgba(255, 255, 255, 0.1);
+	}
+
+	.menu-toggle .line {
+		transition: transform 0.3s ease, opacity 0.3s ease;
+		transform-box: fill-box;
+		transform-origin: center;
+	}
+
+	.menu-toggle.active .line-1 {
+		transform: translateY(6px) rotate(45deg);
+	}
+
+	.menu-toggle.active .line-2 {
+		opacity: 0;
+	}
+
+	.menu-toggle.active .line-3 {
+		transform: translateY(-6px) rotate(-45deg);
+	}
+
+	@media (max-width: 768px) {
+		.menu-toggle {
+			display: flex;
+		}
+
+		.nav-links {
+			position: fixed;
+			top: 0;
+			right: -100%;
+			width: 75%;
+			max-width: 280px;
+			height: 100vh;
+			background-color: #0a0a0a;
+			border-left: 1px solid rgba(255, 255, 255, 0.1);
+			flex-direction: column;
+			padding: 7rem 2rem 2rem 2rem;
+			gap: 1.5rem;
+			z-index: 105;
+			transition: right 0.3s ease;
+			box-shadow: -10px 0 30px rgba(0, 0, 0, 0.9);
+		}
+
+		.nav-links.active {
+			right: 0;
+		}
+
+		.search-container {
+			max-width: 180px;
+			margin: 0 1rem 0 0;
+		}
+	}
+</style>
+
+<style is:global>
+	.search-result-item {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.8rem;
+		text-decoration: none;
+		color: white;
+		transition: background 0.2s ease;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	}
+
+	.search-result-item:last-child {
+		border-bottom: none;
+	}
+
+	.search-result-item:hover {
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	.search-result-item img {
+		width: 40px !important;
+		height: 60px !important;
+		object-fit: cover !important;
+		border-radius: 4px;
+	}
+
+	.search-result-info h4 {
+		margin: 0 0 0.2rem 0;
+		font-size: 0.9rem;
+		font-weight: 600;
+		text-shadow: none;
+	}
+
+	.search-result-info span {
+		font-size: 0.8rem;
+		color: #888;
+		text-shadow: none;
+	}
+
+	.no-results {
+		padding: 1rem;
+		text-align: center;
+		color: #888;
+		font-size: 0.9rem;
+	}
+
+	.search-error {
+		padding: 1rem;
+		text-align: center;
+		color: #ff8c8c;
+		font-size: 0.9rem;
+	}
+</style>

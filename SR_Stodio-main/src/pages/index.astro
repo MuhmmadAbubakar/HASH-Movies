@@ -1,0 +1,33 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Hero from '../components/Hero.astro';
+import DirectoryAccordion from '../components/DirectoryAccordion.astro';
+import MovieGrid from '../components/MovieGrid.astro';
+import Footer from '../components/Footer.astro';
+import { getTopRatedMovies, getTrendingMovies } from '../lib/tmdb';
+
+const [trendingMovies, topRatedMovies] = await Promise.all([
+	getTrendingMovies(),
+	getTopRatedMovies(),
+]);
+const featuredMovie = trendingMovies[0];
+---
+
+<Layout 
+	title="HASH Movies — Discover Movies"
+	description="Explore what's trending, discover top-rated films, and find your next favorite movie with HASH Movies."
+>
+	<Header />
+	<main>
+		{featuredMovie && <Hero movie={featuredMovie} />}
+		<div id="trending">
+			<MovieGrid title="Trending This Week" movies={trendingMovies.slice(0, 12)} />
+		</div>
+		<div id="top-rated">
+			<MovieGrid title="Top Rated Movies" movies={topRatedMovies.slice(0, 12)} />
+		</div>
+		<DirectoryAccordion />
+	</main>
+	<Footer />
+</Layout>

@@ -1,0 +1,365 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import MovieGrid from '../../components/MovieGrid.astro';
+import movies from '../../data/movies.json';
+import { getMovieDetails, searchMovies, TmdbError } from '../../lib/tmdb';
+import { slugify } from '../../utils/slugify.js';
+
+const rawSlug = Astro.params.slug ?? '';
+const slugId = rawSlug.match(/-(\d+)$/);
+const movieId = /^\d+$/.test(rawSlug)
+	? Number(rawSlug)
+	: slugId ? Number(slugId[1]) : 0;
+let movie = null;
+
+if (movieId > 0) {
+	try {
+		movie = await getMovieDetails(movieId);
+	} catch (error) {
+		if (!(error instanceof TmdbError) || error.status !== 404) {
+			throw error;
+		}
+	}
+} else {
+	const legacyMovie = movies.find((item) => slugify(item.title) === rawSlug);
+	if (legacyMovie) {
+		const results = await searchMovies(legacyMovie.title);
+		const match = results.find((item) => slugify(item.title) === rawSlug);
+		if (match) {
+			movie = await getMovieDetails(match.id);
+		}
+	}
+}
+
+if (movie) {
+	const canonicalSlug = `${slugify(movie.title)}-${movie.id}`;
+	if (rawSlug !== canonicalSlug) {
+		return Astro.redirect(`/movie/${canonicalSlug}`, 301);
+	}
+}
+
+if (!movie) {
+	Astro.response.status = 404;
+}
+
+const formatRuntime = (minutes: number | null) => {
+	if (!minutes) return '';
+	const hours = Math.floor(minutes / 60);
+	const remainingMinutes = minutes % 60;
+	return hours ? `${hours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
+};
+---
+
+<Layout
+	title={movie ? `${movie.title} (${movie.year}) — HASH Movies` : 'Movie not found — HASH Movies'}
+	description={movie?.description || 'Explore movie details and discover your next favorite film.'}
+	image={movie?.backdropUrl || movie?.imageUrl}
+	type="video.movie"
+	movieData={movie ? {
+		title: movie.title,
+		description: movie.description,
+		imageUrl: movie.imageUrl,
+		year: movie.year,
+		rating: movie.rating,
+		category: movie.category,
+	} : undefined}
+>
+	<Header />
+	<main class="movie-page">
+		{movie ? (
+			<>
+				<div class="backdrop" style={movie.backdropUrl ? `background-image: linear-gradient(90deg, rgba(0,0,0,.92), rgba(0,0,0,.4)), url("${movie.backdropUrl}")` : ''}></div>
+				<section class="content">
+					{movie.imageUrl && (
+						<img class="poster" src={movie.imageUrl} alt={`${movie.title} poster`} fetchpriority="high" />
+					)}
+					<div class="details">
+						<span class="category-badge">{movie.category}</span>
+						<h1>{movie.title}</h1>
+						<div class="meta">
+							<span>{movie.year}</span>
+							<span aria-hidden="true">·</span>
+							<span class="rating">★ {movie.rating} / 10</span>
+							{movie.runtime && <><span aria-hidden="true">·</span><span>{formatRuntime(movie.runtime)}</span></>}
+						</div>
+						<h2>Overview</h2>
+						<p class="description">{movie.description || 'No overview is available for this movie yet.'}</p>
+						{movie.cast.length > 0 && (
+							<div class="cast">
+								<h2>Cast</h2>
+								<p>{movie.cast.map((person) => person.name).join(' · ')}</p>
+							</div>
+						)}
+						{movie.trailerUrl && (
+							<div class="trailer">
+								<h2>Official Trailer</h2>
+								<iframe
+									src={movie.trailerUrl}
+									title={`${movie.title} official trailer`}
+									loading="lazy"
+									referrerpolicy="strict-origin-when-cross-origin"
+									allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+									allowfullscreen
+								></iframe>
+							</div>
+						)}
+						<section class="watch-options" aria-labelledby="watch-options-title">
+							<h2 id="watch-options-title">Where to Watch in the United States</h2>
+							{movie.watchOffers.length > 0 ? (
+								<>
+									{movie.watchOffers.map((offer) => (
+										<div class="provider-group">
+											<h3>{offer.label}</h3>
+											<div class="provider-list">
+												{offer.providers.map((provider) => (
+													<div class="provider" title={provider.name}>
+														{provider.logoUrl && <img src={provider.logoUrl} alt="" loading="lazy" />}
+														<span>{provider.name}</span>
+													</div>
+												))}
+											</div>
+										</div>
+									))}
+									{movie.watchLink && (
+										<a class="watch-link" href={movie.watchLink} target="_blank" rel="noopener noreferrer">
+											See options on TMDB
+											<span aria-hidden="true">↗</span>
+										</a>
+									)}
+								</>
+							) : (
+								<p class="no-providers">No streaming, rental, or purchase options are listed for the United States.</p>
+							)}
+							<p class="provider-credit">
+								Availability data by <a href="https://www.justwatch.com/" target="_blank" rel="noopener noreferrer">JustWatch</a>.
+							</p>
+						</section>
+					</div>
+				</section>
+				{movie.similarMovies.length > 0 && (
+					<MovieGrid title="You Might Also Like" movies={movie.similarMovies} />
+				)}
+			</>
+		) : (
+			<section class="not-found">
+				<p class="eyebrow">404 · NOT FOUND</p>
+				<h1>We couldn't find that movie.</h1>
+				<p>It may have been removed or the link may be incorrect.</p>
+				<a href="/" class="home-link">Back to home</a>
+			</section>
+		)}
+	</main>
+	<Footer />
+</Layout>
+
+<style>
+	.movie-page {
+		min-height: 100vh;
+		padding-top: 6rem;
+	}
+
+	.backdrop {
+		position: absolute;
+		inset: 0 0 auto;
+		height: 75vh;
+		min-height: 420px;
+		background-color: #111;
+		background-position: center 25%;
+		background-size: cover;
+		z-index: 0;
+		mask-image: linear-gradient(to bottom, black 35%, transparent 100%);
+	}
+
+	.content {
+		position: relative;
+		z-index: 1;
+		max-width: 1200px;
+		margin: 0 auto;
+		padding: 4rem 5% 5rem;
+		display: grid;
+		grid-template-columns: minmax(200px, 300px) 1fr;
+		gap: clamp(2rem, 6vw, 5rem);
+	}
+
+	.poster {
+		width: 100%;
+		border-radius: 12px;
+		box-shadow: 0 20px 50px #000b;
+	}
+
+	.details {
+		align-self: center;
+	}
+
+	.category-badge,
+	.eyebrow {
+		color: #ff5964;
+		font-size: .8rem;
+		font-weight: 800;
+		letter-spacing: .12em;
+		text-transform: uppercase;
+	}
+
+	h1 {
+		margin: .75rem 0 1rem;
+		font-size: clamp(2.4rem, 5vw, 4.5rem);
+		line-height: 1.05;
+	}
+
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .75rem;
+		align-items: center;
+		color: #c7c7c7;
+	}
+
+	.rating {
+		color: #f5c518;
+	}
+
+	h2 {
+		margin: 2rem 0 .75rem;
+		font-size: 1.2rem;
+	}
+
+	.description,
+	.cast p {
+		color: #d3d3d3;
+		font-size: 1.05rem;
+		line-height: 1.8;
+	}
+
+	.trailer iframe {
+		width: min(100%, 720px);
+		aspect-ratio: 16 / 9;
+		border: 0;
+		border-radius: 10px;
+		background: #111;
+	}
+
+	.watch-options {
+		margin-top: 2rem;
+		padding: 1.25rem;
+		max-width: 720px;
+		border: 1px solid rgba(255, 255, 255, .12);
+		border-radius: 10px;
+		background: rgba(15, 15, 15, .8);
+	}
+
+	.watch-options h2 {
+		margin-top: 0;
+	}
+
+	.provider-group + .provider-group {
+		margin-top: 1rem;
+	}
+
+	.provider-group h3 {
+		margin: 0 0 .5rem;
+		font-size: .9rem;
+		color: #aaa;
+	}
+
+	.provider-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .6rem;
+	}
+
+	.provider {
+		display: flex;
+		align-items: center;
+		gap: .5rem;
+		min-height: 48px;
+		padding: .35rem .65rem;
+		border: 1px solid rgba(255, 255, 255, .1);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, .04);
+		color: #e6e6e6;
+		font-size: .85rem;
+	}
+
+	.provider img {
+		width: 32px;
+		height: 32px;
+		border-radius: 6px;
+		object-fit: cover;
+	}
+
+	.watch-link {
+		display: inline-flex;
+		align-items: center;
+		gap: .5rem;
+		margin-top: 1.25rem;
+		padding: .75rem 1rem;
+		border-radius: 6px;
+		background: #e50914;
+		color: white;
+		font-weight: 700;
+	}
+
+	.watch-link:hover {
+		background: #bd0811;
+	}
+
+	.no-providers,
+	.provider-credit {
+		color: #aaa;
+		font-size: .9rem;
+		line-height: 1.6;
+	}
+
+	.provider-credit {
+		margin: 1rem 0 0;
+	}
+
+	.provider-credit a {
+		color: #fff;
+		text-decoration: underline;
+	}
+
+	.not-found {
+		position: relative;
+		z-index: 1;
+		max-width: 720px;
+		min-height: 65vh;
+		margin: 0 auto;
+		padding: 5rem 5%;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: center;
+	}
+
+	.not-found h1 {
+		font-size: clamp(2rem, 5vw, 3.5rem);
+	}
+
+	.not-found > p:not(.eyebrow) {
+		color: #aaa;
+	}
+
+	.home-link {
+		margin-top: 1rem;
+		padding: .8rem 1.2rem;
+		border-radius: 5px;
+		background: white;
+		color: #111;
+		font-weight: 700;
+	}
+
+	@media (max-width: 760px) {
+		.content {
+			grid-template-columns: 1fr;
+			padding-top: 2rem;
+		}
+
+		.poster {
+			width: min(65%, 260px);
+			margin: 0 auto;
+		}
+	}
+</style>
