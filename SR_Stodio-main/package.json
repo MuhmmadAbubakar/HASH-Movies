@@ -8,12 +8,11 @@
   "scripts": {
     "dev": "node --env-file-if-exists=.env ./node_modules/astro/bin/astro.mjs dev",
     "build": "astro build",
-    "start": "node --env-file-if-exists=.env ./dist/server/entry.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/node": "^10.1.4",
+    "@astrojs/netlify": "^7.0.13",
     "astro": "^6.4.8"
   }
 }

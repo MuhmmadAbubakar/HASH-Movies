@@ -4,7 +4,6 @@
   "scripts": {
     "dev": "npm --prefix ./SR_Stodio-main run dev",
     "build": "npm --prefix ./SR_Stodio-main run build",
-    "start": "npm --prefix ./SR_Stodio-main run start",
     "preview": "npm --prefix ./SR_Stodio-main run preview"
   }
 }

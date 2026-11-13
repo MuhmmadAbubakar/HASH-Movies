@@ -20,11 +20,13 @@ The local `.env` file is ignored by Git. To set up another environment, copy `.e
 
 ## Build and run
 
-This project uses Astro's Node adapter and must run as a server; it is not a static-only export.
+This project uses Astro's Netlify adapter for server-rendered pages and API routes. The root `netlify.toml` sets `SR_Stodio-main` as Netlify's base directory.
 
 ```bash
 npm run build
-npm start
+npm run preview
 ```
+
+For Netlify, set `TMDB_API_KEY` under **Site configuration → Environment variables**. The local `.env` file is not committed and is not available to Netlify.
 
 The site displays TMDB API attribution in the footer.
